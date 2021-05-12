@@ -38,7 +38,7 @@ def check_arg(ct):
         sys.exit(1)
 
 def abort_job(base, job_id):
-    ur = "%s/%s/abort" %(base, job_id)
+    url = "%s/%s/abort" %(base, job_id)
     resp = requests.post(url, verify=False).json()
     return resp
 
