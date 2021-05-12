@@ -19,7 +19,7 @@ _Q_FAST_MAX_NODES = 25
 _Q_REGULAR = 'regular'
 _Q_REGULAR_TIME = '12:00:00'
 _Q_FAST_MAX_JOBS =2
-_SUBMIT_SCRIPT = '/global/homes/n/nmdcda/condor_worker.sh'
+_SUBMIT_SCRIPT = '/global/homes/n/nmdcda/condor_worker_idle.sh'
 _JOB_NAME = 'nmdc_condor_wrk'
 _LOG_FILE = 'autoscale.log'
 
