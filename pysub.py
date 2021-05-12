@@ -31,7 +31,53 @@ def read_config():
 
 #_url = "http://cori21-ib0:8088/api/workflows/v1"
 
+def _json_tmp(data):
+    fp, fname = tempfile.mkstemp(suffix='.json')
+    with os.fdopen(fp, 'w') as fd:
+        fd.write(json.dumps(data))
+    return fname
 
+
+def ezsubmit(url, wdl, wdl_dir, inputs, labels=None, bundle_fn=None, options=None):
+    """
+    Submit a job
+    """
+    # Write input file
+    infname = _json_tmp(inputs)
+
+    if labels:
+        lblname = _json_tmp(labels)
+
+    if not wdl.startswith('/'):
+        wdl = os.path.join(wdl_dir, wdl)
+    bundle = os.path.join(wdl_dir, bundle_fn)
+    files = {
+        'workflowSource': open(wdl),
+        'workflowInputs': open(infname)
+    }
+    if bundle_fn:
+        files['workflowDependencies'] = open(bundle, 'rb')
+
+    if labels:
+        files['labels'] = open(lblname)
+
+    if options:
+        files['workflowOptions'] = open(options)
+
+    resp = requests.post(url, data={}, files=files, verify=False)
+    for fld in files:
+        files[fld].close()
+    os.unlink(infname)
+    if labels:
+        os.unlink(lblname)
+
+#    print(str(resp.text))
+    job_id = json.loads(resp.text)['id']
+    return job_id
+
+def log_submit(job_id):
+    with open('last_submit', 'w') as f:
+        f.write(job_id)
 
 def submit(url, fna, pid, wdl, tmpl_dir, wdl_dir, bundle_fn='bundle.zip', options=None):
     """
