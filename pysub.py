@@ -38,7 +38,7 @@ def _json_tmp(data):
     return fname
 
 
-def ezsubmit(url, wdl, wdl_dir, inputs, labels=None, bundle_fn=None, options=None):
+def ezsubmit(url, wdl, wdl_dir, inputs, labels=None, bundle_fn=None, options=None, dryrun=False):
     """
     Submit a job
     """
@@ -50,7 +50,11 @@ def ezsubmit(url, wdl, wdl_dir, inputs, labels=None, bundle_fn=None, options=Non
 
     if not wdl.startswith('/'):
         wdl = os.path.join(wdl_dir, wdl)
-    bundle = os.path.join(wdl_dir, bundle_fn)
+    if bundle_fn:
+        bundle = bundle_fn
+        if not bundle_fn.startswith('/'):
+            bundle = os.path.join(wdl_dir, bundle)
+
     files = {
         'workflowSource': open(wdl),
         'workflowInputs': open(infname)
@@ -64,7 +68,11 @@ def ezsubmit(url, wdl, wdl_dir, inputs, labels=None, bundle_fn=None, options=Non
     if options:
         files['workflowOptions'] = open(options)
 
-    resp = requests.post(url, data={}, files=files, verify=False)
+    if not dryrun:
+        resp = requests.post(url, data={}, files=files, verify=False)
+        job_id = json.loads(resp.text)['id']
+    else:
+        job_id = "dryrun"
     for fld in files:
         files[fld].close()
     os.unlink(infname)
@@ -72,7 +80,6 @@ def ezsubmit(url, wdl, wdl_dir, inputs, labels=None, bundle_fn=None, options=Non
         os.unlink(lblname)
 
 #    print(str(resp.text))
-    job_id = json.loads(resp.text)['id']
     return job_id
 
 def log_submit(job_id):
