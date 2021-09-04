@@ -6,6 +6,7 @@ import os
 import json
 from getpass import getuser
 import requests
+from nmdcapi import get_token, mint
 from yaml import load
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
@@ -63,27 +64,44 @@ def generate_input(conf, md):
     data_dir = os.path.join(conf['data_dir'], md['activity_id'])
         
     # TODO:make some type of template
-    inp = {
-           "nmdc_metag.proj": md['activity_id'],
-           "nmdc_metag.informed_by": md['proj'],
-           "nmdc_metag.input_file": md['file'],
-           "nmdc_metag.git_url": md['git_url'],
-           "nmdc_metag.outdir": data_dir,
-           "nmdc_metag.resource": conf['resource'],
-           "nmdc_metag.url_root": conf['url_root']
-         }
+    typ = md['type']
+    if typ == "Metagenome":
+        inp = {
+               "nmdc_metag.proj": md['activity_id'],
+               "nmdc_metag.informed_by": md['proj'],
+               "nmdc_metag.input_file": md['file'],
+               "nmdc_metag.git_url": md['git_url'],
+               "nmdc_metag.outdir": data_dir,
+               "nmdc_metag.resource": conf['resource'],
+               "nmdc_metag.url_root": conf['url_root']
+             }
+    elif typ == "Metatranscriptome":
+        inp = {
+               "nmdc_metat.proj":  md['activity_id'],
+               "nmdc_metat.informed_by": md['proj'],
+               "nmdc_metat.input_file": md['file'],
+               "nmdc_metat.git_url": md['git_url'],
+               "nmdc_metat.outdir": data_dir,
+               "nmdc_metat.resource": conf['resource'],
+               "nmdc_metat.url_root": conf['url_root']
+              }
+    else:
+        raise ValueError("Huh? What is %s" % (typ))
 
     return inp
 
 
 def get_activity_id(conf, prefix):
+    tok = get_token()
+    actid = mint(tok, "nmdc", prefix, 1)[0]
+    print(actid)
     # This is temporary hack
-    sf = conf['activity_id_state']
-    actid = int(open(sf).read())
-    actid += 1
-    with open(sf, "w") as f:
-        f.write("%d\n" % (actid))
-    return "nmdc:%s%07d" % (prefix, actid)
+    #sf = conf['activity_id_state']
+    #actid = int(open(sf).read())
+    #actid += 1
+    #with open(sf, "w") as f:
+    #    f.write("%d\n" % (actid))
+    return actid
 
 def check_status(base, job):
     if job=="dryrun":
@@ -100,27 +118,43 @@ def check_status(base, job):
 
     return state
 
-def write_log(fn_sub, inp, lbl, jid):
+def write_log(fn_sub, inp, lbl, jid, typ, actid):
     data = {
             "input": inp,
             "labels": lbl,
-            "jobid": jid
+            "type": typ,
+            "jobid": jid,
+            "activity_id": actid
             }
     with open(fn_sub, "w") as f:
-        f.write(json.dumps(data, indent=2)) 
+        f.write(json.dumps(data, indent=2))
 
-def submit(conf, md, wf, dryrun=False, verbose=False):
-    fn_sub = md['file'] + '.sublog'
+def read_log(fn_sub):
+    sublog = None
     if os.path.exists(fn_sub):
         sublog = json.loads(open(fn_sub).read())
+    return sublog
+
+def submit(conf, md, wf, dryrun=False, verbose=False, force=False):
+    """
+    Check if a task needs to be submitted.
+    """
+    fn_sub = md['file'] + '.sublog'
+    sublog = read_log(fn_sub)
+    if sublog:
         if verbose:
             print(json.dumps(sublog, indent=2))
         status = check_status(conf['url'], sublog['jobid'])
-        if status not in ['Failed', 'Aborted', 'Aborting']:
+        if not force and status not in ['Failed', 'Aborted', 'Aborting']:
             print("Skipping: %s %s" % (md['file'], status))
             return
         # Reuse the ID from before
-        md['activity_id'] = sublog['input']['nmdc_metag.proj']
+        # TODO: Maybe include in the wf config yaml
+        if md['type'] == 'Metagenome': 
+            prev_proj =  sublog['input']['nmdc_metag.proj']
+        else:
+            prev_proj =  sublog['input']['nmdc_metat.proj']
+        md['activity_id'] = prev_proj
         print("Resubmit %s" % (md['activity_id']))
     else:
         md['activity_id'] = get_activity_id(conf, md['prefix'])
@@ -128,7 +162,7 @@ def submit(conf, md, wf, dryrun=False, verbose=False):
     inp = generate_input(conf, md)
     jid = pysub.ezsubmit(conf['url'], wf['wdl'], conf['wdl_dir'], inp, labels=lbl, bundle_fn=wf['bundle'], dryrun=dryrun)
     if not dryrun:
-        write_log(fn_sub, inp, lbl, jid)
+        write_log(fn_sub, inp, lbl, jid, md['type'], md['activity_id']) 
 
 if __name__ == "__main__":
     conf = pysub.read_config()
@@ -136,6 +170,7 @@ if __name__ == "__main__":
     idx = 1
     dryrun = False
     verbose = False
+    force = False
     if '-n' in sys.argv:
         print("Dryrun")
         idx += 1
@@ -144,14 +179,18 @@ if __name__ == "__main__":
         print("Verbose")
         idx += 1
         verbose = True
+    if '-f' in sys.argv:
+        print("Force")
+        idx += 1
+        force = True
     for fn in sys.argv[idx:]:
         if not fn.endswith('.json'):
             fn = fn + '.json'
         md = read_meta(fn, workflows)
         typ = md['type']
         wf = workflows[typ]
-        if typ != "Metagenome":
-            print("TODO: Add support for non-Metagenome workflows")
-            continue
-        submit(conf, md, wf, dryrun=dryrun, verbose=verbose)
+#        if typ != "Metagenome":
+#            print("TODO: Add support for non-Metagenome workflows (%s)" % (fn))
+#            continue
+        submit(conf, md, wf, dryrun=dryrun, verbose=verbose, force=force)
          

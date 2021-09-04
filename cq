@@ -8,28 +8,97 @@ import sys
 import os
 import shutil
 import urllib3
-urllib3.disable_warnings()
+#urllib3.disable_warnings()
+from wfutils import config
 
-def read_config():
-    """
-    Read config file for URL, WDL dir and template dir
-    """
-    cf = os.path.join(os.environ['HOME'], '.wf_config')
-    conf = dict()
-    with open(cf) as f:
-        for line in f:
-            if line.startswith("#"):
-                continue
-            (k, v) = line.rstrip().split('=')
-            conf[k.lower()] = v
-        if 'cromwell_url' not in conf:
-            print("Missing URL")
-            sys.exit(1)
-        conf['url'] = conf['cromwell_url']
-        if 'api' not in conf['url']:
-            conf['url'] = conf['url'].rstrip('/') + "/api/workflows/v1"
-    return conf
 
+class CQ():
+    conf = config().conf
+    base = conf['url']
+    
+    def abort_job(self, job_id):
+        url = "%s/%s/abort" %(self.base, job_id)
+        resp = requests.post(url, verify=False).json()
+        return resp
+
+    def copy_output(self, job_id, outdir):
+        url = "%s/%s/metadata" %(self.base, job_id)
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        resp = requests.get(url, verify=False)
+        outs = resp.json()['outputs']
+        for k in outs:
+            print("Copying " + k)
+            fn = outs[k]
+            shutil.copy(fn, os.path.join(outdir, os.path.basename(fn)))
+
+    def job_status(self, job_id):
+        url = "%s/%s/status" %(self.base, job_id)
+        resp = requests.get(url, verify=False).json()
+        return resp
+
+    def list_jobs(self, status, type=None, key=None, value=None, labels=False):
+            if status == 'All':
+                query = "includeSubworkflows=false&additionalQueryResultFields=labels"
+            elif key and value:
+                query = "label={}:{}&additionalQueryResultFields=labels".format(key, value)
+            elif labels:
+            #query = "status=Succeeded&additionalQueryResultFields=labels&includeSubworkflows=false"
+                query = "status={}&additionalQueryResultFields=labels&includeSubworkflows=false".format(status)
+            else:
+                query = "status={}".format(status)
+            url = "%s/query?%s" % (self.base, query)
+            resp = requests.get(url, verify=False)
+            d = resp.json()
+            for i in d['results']:
+                for k in ['parentWorkflowId', 'rootWorkflowId', 'name', 'start']:
+                    if k not in i:
+                        i[k] = '-'
+
+                if labels:
+                    if 'labels' not in i:
+                        continue
+                    i['proj'] = i['labels'].get('project_id', '-')
+                    i['vers'] = i['labels'].get('pipeline_version', '-')
+                    i['pipeline'] = i['labels'].get('pipeline', '-')
+                    print("{id:36}  {name:14} {status:10} {proj:15} {vers:9}  {pipeline:16}  {start}".format(**i))
+                else:
+                    print("{id:36}  {name:14} {parentWorkflowId:36}  {rootWorkflowId:36}  {status}   {start}".format(**i))
+
+
+    def jobs(self, jid, filt):
+        url = '{}/{}/metadata'.format(self.base, jid)
+        data = {}
+        resp = requests.get(url)
+    
+        d = resp.json()
+        for f in d['calls']:
+            for s in d['calls'][f]:
+                if filt and f.find(filt)<0:
+                    continue
+                if 'jobId' in s:
+                    print("#{} {}".format(f, jid), file=sys.stderr)
+                    print(s['jobId'])
+
+    def get_jid(self, jid, status, filt):
+    
+        url = "{}/query?status={}&additionalQueryResultFields=labels".format(self.base, status)
+        data = {}
+        resp = requests.get(url, verify=False)
+        d = resp.json()
+        for i in d['results']:
+            if 'parentWorkflowId' not in i:
+                i['parentWorkflowId'] = '-'
+            if 'rootWorkflowId' not in i:
+                i['rootWorkflowId'] = '-'
+            if 'name' not in i:
+                i['name']=""
+            if jid and i['id'] == jid:
+                jobs(self.base, i['id'], filt)
+            elif jid and i['rootWorkflowId'] == jid:
+                jobs(self.base, i['id'], filt)
+            elif not jid:
+                jobs(self.base, i['id'], filt)
 
 
 def check_arg(ct):
@@ -37,134 +106,54 @@ def check_arg(ct):
         print("arg required")
         sys.exit(1)
 
-def abort_job(base, job_id):
-    url = "%s/%s/abort" %(base, job_id)
-    resp = requests.post(url, verify=False).json()
-    return resp
-
-def copy_output(base, job_id, outdir):
-    url = "%s/%s/metadata" %(base, job_id)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-    resp = requests.get(url, verify=False)
-    outs = resp.json()['outputs']
-    for k in outs:
-        print("Copying " + k)
-        fn = outs[k]
-        shutil.copy(fn, os.path.join(outdir, os.path.basename(fn)))
-
-def job_status(base, job_id):
-    url = "%s/%s/status" %(base, job_id)
-    resp = requests.get(url, verify=False).json()
-    return resp
-
-def list_jobs(base, status, sample=None):
-        if status == 'All':
-            query = "includeSubworkflows=false&additionalQueryResultFields=labels"
-        elif status == 'sample':
-            query = "label=project_id:{}&additionalQueryResultFields=labels".format(sample)
-        elif status == 'Labels':
-            query = "status=Succeeded&additionalQueryResultFields=labels&includeSubworkflows=false"
-        else:
-            query = "status={}".format(status)
-        url = "%s/query?%s" % (base, query)
-        resp = requests.get(url, verify=False)
-        d = resp.json()
-        for i in d['results']:
-           if 'parentWorkflowId' not in i:
-               i['parentWorkflowId'] = '-'
-           if 'rootWorkflowId' not in i:
-               i['rootWorkflowId'] = '-'
-           if 'name' not in i:
-               i['name']=""
-           if 'start' not in i:
-               i['start'] = '-'
-           if status == 'Labels':
-               i['proj'] = i['labels'].get('project_id', '-')
-               i['vers'] = i['labels'].get('pipeline_version', '-')
-               i['pipeline'] = i['labels'].get('pipeline', '-')
-               print("{id:36}  {name:14} {proj:15} {vers:9}  {pipeline:16}  {start}".format(**i))
-           else:
-               print("{id:36}  {name:14} {parentWorkflowId:36}  {rootWorkflowId:36}  {status}   {start}".format(**i))
-
-
-def jobs(base, jid, filt):
-    url = '{}/{}/metadata'.format(base, jid)
-    data = {}
-    resp = requests.get(url)
-
-    d = resp.json()
-    for f in d['calls']:
-        for s in d['calls'][f]:
-            if filt and f.find(filt)<0:
-                continue
-            if 'jobId' in s:
-                print("#{} {}".format(f, jid), file=sys.stderr)
-                print(s['jobId'])
-
-def get_jid(base, jid, status, filt):
-
-    url = "{}/query?status={}&additionalQueryResultFields=labels".format(base, status)
-    data = {}
-    resp = requests.get(url, verify=False)
-    d = resp.json()
-    for i in d['results']:
-        if 'parentWorkflowId' not in i:
-            i['parentWorkflowId'] = '-'
-        if 'rootWorkflowId' not in i:
-            i['rootWorkflowId'] = '-'
-        if 'name' not in i:
-            i['name']=""
-        if jid and i['id'] == jid:
-            jobs(base, i['id'], filt)
-        elif jid and i['rootWorkflowId'] == jid:
-            jobs(base, i['id'], filt)
-        elif not jid:
-            jobs(base, i['id'], filt)
-
 def usage():
     print("usage: cq <abort|status|running|submitted|all|labels|meta>")
 
 def main():
+    cq = CQ()
     states = ['running', 'failed', 'submitted',
-              'aborted', 'aborting', 'all', 'labels', 'succeeded']
+              'aborted', 'aborting', 'all', 'succeeded']
 
     if len(sys.argv) < 2:
         usage()
         sys.exit(1)
-    conf = read_config()
-    base = conf['url']
 
     command = sys.argv[1]
     if len(sys.argv) > 2:
         job_id = sys.argv[2]
     if command=='abort':
         check_arg(3)
-        print(abort_job(base, job_id))
+        print(cq.abort_job(job_id))
     
     elif command=='copy':
         check_arg(4)
         outdir = sys.argv[3]
-        copy_output(base, job_id, outdir)
+        cq.copy_output(job_id, outdir)
     elif  command=='status':
         check_arg(3)
-        resp = job_status(base, job_id)
+        resp = cq.job_status(job_id)
         print(resp) 
     elif  command.startswith('meta'):
         url = "%s/%s/metadata?expandSubWorkflows=true" %(base, job_id)
         resp = requests.get(url, verify=False).json()
         print(json.dumps(resp, indent=4)) 
     elif  command=='graph':
-        url = "%s/%s/timing" %(base, job_id)
+        url = "%s/%s/timing" %(job_id)
         resp = requests.get(url, verify=False)
         with open(sys.argv[3], "w") as f:
             f.write(resp.text)
+    elif command=='labels':
+        status = 'All'
+        if len(sys.argv) > 2:
+            status = sys.argv[2]
+        cq.list_jobs(status, labels=True)
     elif command in states:
         status = command.capitalize()
-        list_jobs(base, status)
-    elif  command=='sample':
-        sample = sys.argv[2]
-        list_jobs(base, 'sample', sample=sample)
+        cq.list_jobs(status)
+    elif  command=='search_label':
+        key = sys.argv[2]
+        value = sys.argv[3]
+        cq.list_jobs('label', key=key, value=value)
     elif command=='jid':
         filt = None
         jid = None
@@ -175,7 +164,7 @@ def main():
             filt = sys.argv[3]
         if len(sys.argv) > 4:
             status = sys.argv[4].capitalize()
-        get_jid(base, jid, status, filt)
+        cq.get_jid(jid, status, filt)
     else:
         print("{} not recongnized".format(command))
         usage()

@@ -49,7 +49,8 @@ if __name__ == "__main__":
     url = "https://sdm2.jgi-psf.org/api/"
 
     do_fetch = False
-
+    if len(sys.argv) == 1:
+        print("usage: jamo_fetch [-f] <proposal> [path]")
     if sys.argv[1] == "-f":
         do_fetch = True
         prop = sys.argv[2]
@@ -83,5 +84,4 @@ if __name__ == "__main__":
                  f.write(json.dumps(row, indent=2))
 
     resp = fetch(url, req_list)
-    print(resp)
 
