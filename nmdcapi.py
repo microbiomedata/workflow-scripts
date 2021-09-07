@@ -227,13 +227,24 @@ class nmdcapi():
         if results:
             d['result'] = results
         if meta:
-            d['metadata'] = meta
+            # Need to preserve the existing metadata
+            cur = self.get_op(opid)
+            if not cur['metadata']:
+                # this means we messed up the record before.
+                # This can't be fixed so just return
+                return None
+            d['metadata'] = cur['metadata'] 
+            d['metadata']['extra'] = meta
         resp = requests.patch(url, headers=self.header, data=json.dumps(d))
         return resp.json()
+
+def jprint(obj):
+    print(json.dumps(obj, indent=2))
 
 
 def usage():
     print("usage: ....")
+
 
 if __name__ == "__main__":
     nmdc = nmdcapi()
@@ -245,13 +256,17 @@ if __name__ == "__main__":
         nmdc.set_type(obj, typ)
     elif sys.argv[1] == 'get_job':
         obj = sys.argv[2]
-        print(nmdc.get_job(obj))
+        jprint(nmdc.get_job(obj))
+    elif sys.argv[1].startswith('get_obj'):
+        obj = sys.argv[2]
+        d = nmdc.get_object(obj, decode=True)
+        jprint(d)
     elif sys.argv[1] == 'bump_time':
         obj = sys.argv[2]
         nmdc.bump_time(obj)
-    elif sys.argv[1] == 'get_op':
+    elif sys.argv[1].startswith('get_op'):
         opid = sys.argv[2]
-        print(json.dumps(nmdc.get_op(opid), indent=2))
+        jprint(nmdc.get_op(opid))
     else:
         usage()
 

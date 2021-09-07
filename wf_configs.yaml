@@ -1,0 +1,21 @@
+Product Mappings:
+         'Metagenome Metatranscriptome': 'Metatranscriptome'
+         'Metagenome Minimal Draft': 'Metagenome'
+         'Metagenome Standard Draft': 'Metagenome'
+
+Metagenome:
+        version: "1.0.1"
+        pipeline: "metag_annotation"
+        prefix: mga0
+        git_url: "https://github.com/microbiomedata/mg_annotation/releases/tag/0.1"
+        wdl: /global/cfs/cdirs/m3408/aim2/dev/wdl/nmdc-metag_full.wdl
+        bundle: /global/cfs/cdirs/m3408/aim2/dev/wdl/bundle.zip
+
+Metatranscriptome:
+        version: "1.0.1"
+        pipeline: "metat_annotation"
+        prefix: mta0
+        git_url: "https://github.com/microbiomedata/metaT"
+        wdl: /global/cfs/cdirs/m3408/aim2/dev/wdl/nmdc-metat_full.wdl
+        bundle: /global/cfs/cdirs/m3408/aim2/dev/wdl/bundle.zip
+
