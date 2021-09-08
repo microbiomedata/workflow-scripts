@@ -55,9 +55,10 @@ class watcher():
         # Extract parameters
         product = md['metadata']['sequencing_project']['sequencing_product_name']
         typ = workflows["Product Mappings"][product]
-        if typ != "Metagenome":
+        if typ not in workflows["Object Type Mappings"]:
             print("%s not implemented yet" % (typ))
             return
+        otype = workflows["Object Type Mappings"][typ]
         name = os.path.split(fn)[-1]
         # We are using the description field to encode information for now.
         desc = {
@@ -68,7 +69,6 @@ class watcher():
         desc_enc = json.dumps(desc)
         data_url = '%sraw/%s' % (self.conf.conf['url_root'], name)
         # Move to config
-        otype = "metagenome_raw_paired_end_reads"
         obj = self.nmdc.create_object(fn, desc_enc, data_url)
         if 'detail' in obj:
             print(obj)
@@ -78,6 +78,7 @@ class watcher():
         with open(rf, 'w') as f:
             f.write(json.dumps(obj))
         print("registered %s as %s" % (fn, oid))
+        sys.exit(1)
 
     def cycle(self):
         req_list = []

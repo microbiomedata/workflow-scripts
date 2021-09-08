@@ -3,6 +3,10 @@ Product Mappings:
          'Metagenome Minimal Draft': 'Metagenome'
          'Metagenome Standard Draft': 'Metagenome'
 
+Object Type Mappings:
+        Metagenome: metagenome_raw_paired_end_reads
+        Metatranscriptome: metatranscriptome_raw_paired_end_reads
+
 Metagenome:
         version: "1.0.1"
         pipeline: "metag_annotation"
