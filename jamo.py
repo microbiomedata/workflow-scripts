@@ -23,6 +23,21 @@ class Jamo():
               "Metagenome Minimal Draft",
               "Metagenome Metatranscriptome"]
 
+    def get_list2(self, key, val):
+        url = self._base_url + "metadata/pagequery"
+        q = {
+             key: val,
+             "metadata.rqc.usable": True,
+             "metadata.sequencing_project.sequencing_product_name": {
+                 "$in": self._types
+                 }
+            }
+        print(q)
+        print(url)
+        resp = requests.post(url, data=json.dumps({"query": q}))
+        print(resp)
+        return resp.json()
+
     def get_list(self, prop):
         url = self._base_url + "metadata/pagequery"
         q = {
@@ -50,9 +65,13 @@ class Jamo():
                 with open(dst + ".json", "w") as f:
                      f.write(json.dumps(rec, indent=2))
 
+def jprint(obj):
+    print(json.dumps(obj, indent=2))
+
 if __name__ == "__main__":
     conf = config()
     do_fetch = False
+    jamo = Jamo()
     if len(sys.argv) == 1:
         print("usage: jamo (fetch|list) <proposal> [path]")
     comm = sys.argv[1]
@@ -64,11 +83,19 @@ if __name__ == "__main__":
             dst_path = sys.argv[3]
     elif comm == "list":
         prop = sys.argv[2]
+        resp = jamo.get_list(int(prop))
+        jprint(resp)
+        sys.exit()
+    elif comm == "list2":
+        key = sys.argv[2]
+        val = sys.argv[3]
+        resp = jamo.get_list2(key, val)
+        print(resp)
+        sys.exit()
     else:
         print("usage")
         sys.exit(1)
 
-    jamo = Jamo()
     data = jamo.get_list(int(prop))
 
     req_list = []
@@ -89,3 +116,5 @@ if __name__ == "__main__":
                 jamo.copy(src, dst, rec)
 
     resp = jamo.fetch(req_list)
+
+
