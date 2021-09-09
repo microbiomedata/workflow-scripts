@@ -10,6 +10,7 @@ import os
 import sys
 import requests
 import shutil
+import traceback
 
 
 class watcher():
@@ -28,7 +29,7 @@ class watcher():
         self.jobs = []
         self.restored = False
 
-    def restore(self):
+    def restore(self, nocheck=False):
         """
         Restore from chkpt
         """
@@ -39,7 +40,7 @@ class watcher():
             jid = job['nmdc_jobid']
             if jid in seen:
                 continue
-            jr = wfjob(state=job)
+            jr = wfjob(state=job, nocheck=nocheck)
             new_job_list.append(jr)
             seen[jid] = True
         self.jobs = new_job_list
@@ -67,6 +68,7 @@ class watcher():
         print("Entering polling loop")
         while True:
             try:
+                self.nmdc.refresh_token()
                 # Restore the state in case some other
                 # process made a change
                 self.restore()
@@ -80,6 +82,7 @@ class watcher():
             except Exception as e:
                 print("Error")
                 print(e)
+                traceback.print_exc(file=sys.stdout)
             _sleep(self._POLL)
 
     def update_op_state(self):
@@ -112,6 +115,9 @@ class watcher():
         # This is the remote job rec
         rj = op['metadata']['job']
         if rj['workflow']['id'] not in self._ALLOWED:
+            return None
+        if 'object_id' not in rj['config']:
+            # Legacy.  Skip.
             return None
         # This is the input object id
         inp = rj['config']['object_id']
@@ -152,8 +158,9 @@ class watcher():
     def fixckpt(self):
         # Try to fix up ckpt state from multiple 
         # Sources
+        site = self.config.conf['site']
         self.jobs = []
-        for op in self.nmdc.list_ops():
+        for op in self.nmdc.list_ops({"metadata.site_id": site}):
             jstate = self.reconstruct_state(op) 
             if jstate:
                 newjob = wfjob(state=jstate)
@@ -268,6 +275,7 @@ class watcher():
 
     def post_job_done(self, job):
         # Prepare the result record
+        print("Running post for op %s" % (job.opid))
         dd = self.config.get_data_dir()
         outdir = os.path.join(dd, job.activity_id)
         results = {'activities': [], "data_objects": []}
@@ -279,7 +287,8 @@ class watcher():
                 elif fn == 'data_objects.json':
                     path = os.path.join(root, fn)
                     results['data_objects'].append(self._load_json(path))
-        resp = self.nmdc.update_op(job.opid, done=True, results=results)
+        md = job.get_state()
+        resp = self.nmdc.update_op(job.opid, done=True, results=results, meta=md)
         job.done = True
 
     def check_status(self):
@@ -322,18 +331,19 @@ if __name__ == "__main__":
             w.ckpt()
         elif sys.argv[1] == 'resubmit':
             # Let's do it by activity id
-            actid = sys.argv[2]
             w.restore()
-            job = None
-            for j in w.jobs:
-                if j.activity_id == actid:
-                    job = j
-                    break
-            if not job:
-                print("No match found")
-            else:
-                job.cromwell_submit(force=True)
-                jprint(job.get_state())
+            for actid in sys.argv[2:]:
+                job = None
+                for j in w.jobs:
+                    if j.activity_id == actid:
+                        job = j
+                        break
+                if not job:
+                    print("No match found for %s" % (actid))
+                else:
+                    job.cromwell_submit(force=True)
+                    jprint(job.get_state())
+                    w.ckpt()
 
         elif sys.argv[1] == 'fixckpt':
             w.fixckpt()
