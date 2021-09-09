@@ -10,7 +10,6 @@ import mimetypes
 from time import time
 from datetime import datetime
 
-
 def _get_sha256(fn): 
     hashfn = fn + '.sha256'
     if os.path.exists(hashfn):
@@ -45,6 +44,11 @@ class nmdcapi():
 
     def __init__(self):
         self.get_token()
+
+    def refresh_token(self):
+        # If it expires in 60 seconds, refresh
+        if self.expires + 60 > time():
+            self.get_token()
 
     def get_token(self):
         """
@@ -174,17 +178,24 @@ class nmdcapi():
         resp = requests.patch(url, headers=self.header, data=json.dumps(d))
         return resp.json()
 
-    def list_jobs(self, filt=None):
-        url = '%sjobs?max_page_size=200' % (self._base_url)
+    def list_jobs(self, filt=None, max=20):
+        url = '%sjobs?max_page_size=%s' % (self._base_url, max)
         d = {}
         if filt:
             url += '&filter=%s' % (json.dumps(filt))
-        resp = requests.get(url, headers=self.header)
-        data = resp.json()
-        if 'resources' in data:
-            return data['resources']
-        else:
-            return []
+        orig_url = url
+        results = []
+        while True:
+            resp = requests.get(url, data=json.dumps(d), headers=self.header).json()
+            if 'resources' not in resp:
+                sys.stderr.write(str(resp))
+                break
+            results.extend(resp['resources'])
+            if 'next_page_token' not in resp or not resp['next_page_token']:
+                break
+            url = orig_url + "&page_token=%s" % (resp['next_page_token'])
+        return results
+
 
     def get_job(self, job):
         url = '%sjobs/%s' % (self._base_url, job)
@@ -203,16 +214,23 @@ class nmdcapi():
 
         return data
 
-    def list_ops(self, filt=None):
-        url = '%soperations' % (self._base_url)
+    def list_ops(self, filt=None, max_page_size=40):
+        url = '%soperations?max_page_size=%d' % (self._base_url, max_page_size)
         d = {}
-        if filter:
-            d['filter'] = json.dumps(filt)
-        # TODO: Handle pagination
-        d['max_page_size'] = 200
-
-        resp = requests.get(url, data=json.dumps(d), headers=self.header)
-        return resp.json()['resources']
+        if filt:
+            url += '&filter=%s' % (json.dumps(filt))
+        orig_url = url
+        results = []
+        while True:
+            resp = requests.get(url, data=json.dumps(d), headers=self.header).json()
+            if 'resources' not in resp:
+                sys.stderr.write(str(resp))
+                break
+            results.extend(resp['resources'])
+            if not resp['next_page_token']:
+                break
+            url = orig_url + "&page_token=%s" % (resp['next_page_token'])
+        return results
 
     def get_op(self, opid):
         url = '%soperations/%s' % (self._base_url, opid)
@@ -267,6 +285,15 @@ if __name__ == "__main__":
     elif sys.argv[1].startswith('get_op'):
         opid = sys.argv[2]
         jprint(nmdc.get_op(opid))
+    elif sys.argv[1] == 'dumpops':
+        site = sys.argv[2]
+        ops = nmdc.list_ops(filt={'metadata.site_id': site, "done": False})
+        jprint(ops)
+    elif sys.argv[1] == 'dumpjobs':
+        key = sys.argv[2]
+        val = sys.argv[3]
+        ops = nmdc.list_jobs(filt={key: val})
+        jprint(ops)
     else:
         usage()
 
