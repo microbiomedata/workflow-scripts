@@ -73,7 +73,7 @@ class job():
     url_root = conf['url_root']
     debug = False
 
-    def __init__(self, fn=None, typ=None, nmdc_jobid=None, proj=None, opid=None, activity_id=None, state=None):
+    def __init__(self, fn=None, typ=None, nmdc_jobid=None, proj=None, opid=None, activity_id=None, state=None, nocheck=False):
         if state:
             self.activity_id = state['activity_id']
             self.nmdc_jobid = state['nmdc_jobid']
@@ -108,10 +108,10 @@ class job():
             prefix = wf["prefix"]
             self.activity_id = self.nmdc.mint("nmdc", prefix, 1)[0]
 
-        if self.jobid:
+        if self.jobid and not nocheck:
             self.check_status()
 
-        if self.opid:
+        if self.opid and not nocheck:
             opstat = self.nmdc.get_op(self.opid)
             self.done = opstat['done']
 
@@ -212,6 +212,6 @@ class job():
         self._generate_input()
         jid = pysub.ezsubmit(self.cromurl, self.workflow['wdl'], self.conf['wdl_dir'],
                              self.input, labels=self.label, bundle_fn=self.workflow['bundle'])
-        print(jid)
+        print("Submitted: %s" % (jid))
         self.jobid = jid
 
