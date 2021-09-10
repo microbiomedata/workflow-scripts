@@ -143,6 +143,7 @@ class job():
                  "pipeline": self.pipeline,
                  "project_id": self.proj,
                  "activity_id": self.activity_id,
+                 "opid": self.opid,
                  "submitter": getuser()
                 }
         self.label = label
@@ -214,4 +215,5 @@ class job():
                              self.input, labels=self.label, bundle_fn=self.workflow['bundle'])
         print("Submitted: %s" % (jid))
         self.jobid = jid
+        self.done = False
 
