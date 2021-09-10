@@ -272,6 +272,10 @@ if __name__ == "__main__":
         obj = sys.argv[2]
         typ = sys.argv[3]
         nmdc.set_type(obj, typ)
+    elif sys.argv[1] == 'undo':
+        for opid in sys.argv[2:]:
+            resp = nmdc.update_op(opid, done=False)
+            jprint(resp)
     elif sys.argv[1] == 'get_job':
         obj = sys.argv[2]
         jprint(nmdc.get_job(obj))
@@ -287,12 +291,13 @@ if __name__ == "__main__":
         jprint(nmdc.get_op(opid))
     elif sys.argv[1] == 'dumpops':
         site = sys.argv[2]
-        ops = nmdc.list_ops(filt={'metadata.site_id': site, "done": False})
+        ops = nmdc.list_ops(filt={'metadata.site_id': site})
         jprint(ops)
     elif sys.argv[1] == 'dumpjobs':
-        key = sys.argv[2]
-        val = sys.argv[3]
-        ops = nmdc.list_jobs(filt={key: val})
+        filt = None
+        if len(sys.argv) == 4:
+            filt = {sys.argv[2]: sys.argv[3]}
+        ops = nmdc.list_jobs(filt=filt)
         jprint(ops)
     else:
         usage()
