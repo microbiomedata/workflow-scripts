@@ -113,7 +113,10 @@ class nmdcapi():
         resp = requests.get(url, headers=self.header)
         data = resp.json()
         if decode and 'description' in data:
-            data['metadata'] = json.loads(data['description'])
+            try: 
+                data['metadata'] = json.loads(data['description'])
+            except:
+                data['metadata'] = None
 
         return data
 
@@ -293,6 +296,11 @@ if __name__ == "__main__":
         site = sys.argv[2]
         ops = nmdc.list_ops(filt={'metadata.site_id': site})
         jprint(ops)
+    elif sys.argv[1] == 'mint':
+        typ = sys.argv[2]
+        ct = int(sys.argv[3])
+        ids = nmdc.mint("nmdc", typ, ct)
+        jprint(ids)
     elif sys.argv[1] == 'dumpjobs':
         filt = None
         if len(sys.argv) == 4:
