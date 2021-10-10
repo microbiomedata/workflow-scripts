@@ -41,8 +41,8 @@ class CQ():
         return resp
 
     def labels(self, job_id):
-        url = "%s/api/workflows/v1/%s/labels" %(self.base, job_id, expand_s)
-        resp = requests.post(url).json()
+        url = "%s/%s/labels" %(self.base, job_id)
+        resp = requests.get(url).json()
         return resp
 
     def trav(self, w):
@@ -65,7 +65,9 @@ class CQ():
         """
         meta = self.meta(job_id)
         failed_task = self.trav(meta)
-        if os.path.exists(failed_task['stderr']):
+        if not failed_task or 'stderr' not in failed_task:
+            return "Failed to find failed task"
+        elif os.path.exists(failed_task['stderr']):
             stderr = open(failed_task['stderr']).read()
         else:
             stderr = None
@@ -137,6 +139,7 @@ class CQ():
                     i['vers'] = i['labels'].get('pipeline_version', '-')
                     i['pipeline'] = i['labels'].get('pipeline', '-')
                     i['activity_id'] = i['labels'].get('activity_id', '-')
+                    i['opid'] = i['labels'].get('opid', '-')
                 resp.append(i)
             return resp
 #                    print("{id:36}  {name:14} {status:10} {proj:15} {vers:9}  {pipeline:16} {activity_id:14} {start}".format(**i))
@@ -225,7 +228,7 @@ def main():
             status = sys.argv[2]
         resp = cq.list_jobs(status, labels=True)
         for i in resp:
-            print("{id:36}  {name:14} {status:10} {proj:15} {vers:9}  {pipeline:16} {activity_id:14} {start}".format(**i))
+            print("{id:36}  {name:14} {status:10} {proj:15} {vers:9}  {pipeline:16} {activity_id:14} {opid:12} {start}".format(**i))
     elif command in states:
         status = command.capitalize()
         resp = cq.list_jobs(status)
@@ -239,7 +242,7 @@ def main():
             print("{id:36}  {name:14} {status:10} {proj:15} {vers:9}  {pipeline:16} {activity_id:14} {start}".format(**i))
     elif  command.startswith('diag'):
         j = sys.argv[2]
-        labels = cq.meta(j, expand=False)['labels']
+        labels = cq.labels(j)
         msg = cq.diagnose(j)
         print("%s: %s: %s" %(j, labels.get('activity_id'), msg))
     elif  command.startswith('stderr'):
