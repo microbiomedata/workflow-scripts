@@ -85,21 +85,24 @@ class watcher():
                 traceback.print_exc(file=sys.stdout)
             _sleep(self._POLL)
 
-    def update_op_state(self):
+    def update_op_state(self, job):
+        rec = self.nmdc.get_op(job.opid)
+        if not rec['metadata'] or 'site_id' not in rec['metadata']:
+            print("Corrupt op: %s" % (job.opid))
+            # Botched record
+            return None
+        cur = rec['metadata'].get('extra')
+        # Skip if nothing has changed
+        if cur and cur['last_status']==job.last_status:
+            return None
+        print("updating %s" % (job.opid))
+        md = job.get_state()
+        res = self.nmdc.update_op(job.opid, done=job.done, meta=md)
+
+    def update_op_state_all(self):
         for job in self.jobs:
             if job.opid:
-                rec = self.nmdc.get_op(job.opid)
-                if not rec['metadata'] or 'site_id' not in rec['metadata']:
-                    print("Corrupt op: %s" % (job.opid))
-                    # Botched record
-                    continue
-                cur = rec['metadata'].get('extra')
-                # Skip if nothing has changed
-                if cur and cur['last_status']==job.last_status:
-                    continue
-                print("updating %s" % (job.opid))
-                md = job.get_state()
-                res = self.nmdc.update_op(job.opid, meta=md)
+                self.update_op_state(job)
 
     def cromwell_list_jobs_label(self, key, value):
         query = "label={}:{}&additionalQueryResultFields=labels".format(key, value)
@@ -210,6 +213,9 @@ class watcher():
                 sys.stderr.write("missing input")
                 return
             mdata = self.nmdc.get_object(inp, decode=True)
+            if not mdata['metadata']:
+                # Silently skip these
+                return
             typ = mdata['metadata']['type']
             proj = mdata['metadata']['proj']
 
@@ -278,18 +284,28 @@ class watcher():
         print("Running post for op %s" % (job.opid))
         dd = self.config.get_data_dir()
         outdir = os.path.join(dd, job.activity_id)
-        results = {'activities': [], "data_objects": []}
+        results = {'activity_set': [], "data_object_set": []}
         for root, dirs, files in os.walk(outdir):
             for fn in files:
                 if fn == 'activity.json':
                     path = os.path.join(root, fn)
-                    results['activities'].append(self._load_json(path))
+                    d = self._load_json(path)
+                    # TODO: This isn't in the schema yet.
+                    if d['type'] == "nmdc:MetagenomeAnalysisActivity":
+                        continue
+                    results['activity_set'].append(d)
                 elif fn == 'data_objects.json':
                     path = os.path.join(root, fn)
-                    results['data_objects'].append(self._load_json(path))
+                    dos = self._load_json(path)
+                    for do in dos:
+                        results['data_object_set'].append(do)
         md = job.get_state()
-        resp = self.nmdc.update_op(job.opid, done=True, results=results, meta=md)
+        results_fn = os.path.join(outdir, 'results.json')
+        with open(results_fn, "w") as f:
+            f.write(json.dumps(results, indent=2))
+        # TODO: Register this as an object as type
         job.done = True
+        resp = self.nmdc.update_op(job.opid, done=True, results=results, meta=md)
 
     def check_status(self):
         for job in self.jobs:
@@ -332,18 +348,31 @@ if __name__ == "__main__":
         elif sys.argv[1] == 'resubmit':
             # Let's do it by activity id
             w.restore()
-            for actid in sys.argv[2:]:
+            for val in sys.argv[2:]:
                 job = None
+                if val.startswith('gold'):
+                    key = 'proj'
+                elif val.startswith('Gp'):
+                    key = 'proj'
+                    val = "gold:" + val
+                elif val.startswith('nmdc:sys'):
+                    key = 'opid'
+                else:
+                    key = 'activity_id'
                 for j in w.jobs:
-                    if j.activity_id == actid:
+                    jr = j.get_state()
+                    if jr[key] == val:
                         job = j
                         break
                 if not job:
-                    print("No match found for %s" % (actid))
-                else:
-                    job.cromwell_submit(force=True)
-                    jprint(job.get_state())
-                    w.ckpt()
+                    print("No match found for %s" % (val))
+                    continue
+                if job.last_status in ["Running", "Submitted"]:
+                    print("Skipping %s: %s" % (val, job.last_status))
+                    continue
+                job.cromwell_submit(force=True)
+                jprint(job.get_state())
+                w.ckpt()
 
         elif sys.argv[1] == 'fixckpt':
             w.fixckpt()
@@ -353,8 +382,8 @@ if __name__ == "__main__":
             w.dumpckpt()
         elif sys.argv[1] == 'sync':
             w.restore()
-            w.update_op_state()
-        elif sys.argv[1] == 'watch':
+            w.update_op_state_all()
+        elif sys.argv[1] == 'daemon':
             w.watch() 
         elif sys.argv[1] == 'reset':
             print(w.nmdc.update_op(sys.argv[2], done=False))
