@@ -129,13 +129,18 @@ class nmdcapi():
         
         fmeta = os.stat(fn)
         name = os.path.split(fn)[-1]
-        mt = mimetypes.MimeTypes().guess_type(fn)[1]
+        mtypes = mimetypes.MimeTypes().guess_type(fn)
+        if mtypes[1] == None:
+            mt = mtypes[0]
+        else:
+            mt = 'application/%s' % (mtypes[1])
+
         sha = _get_sha256(fn)
         now = datetime.today().isoformat()
         d = {
              "aliases": None,
              "description": description,
-             "mime_type": 'application/%s' % (mt),
+             "mime_type": mt,
              "name": name,
              "access_methods": [
                {
@@ -301,6 +306,12 @@ if __name__ == "__main__":
         ct = int(sys.argv[3])
         ids = nmdc.mint("nmdc", typ, ct)
         jprint(ids)
+    elif sys.argv[1] == 'mkobj':
+        fn = sys.argv[2]
+        desc = sys.argv[3]
+        url = sys.argv[4]
+        resp = nmdc.create_object(fn, desc, url)
+        jprint(resp)
     elif sys.argv[1] == 'dumpjobs':
         filt = None
         if len(sys.argv) == 4:

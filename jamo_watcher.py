@@ -69,6 +69,7 @@ class watcher():
         desc_enc = json.dumps(desc)
         data_url = '%sraw/%s' % (self.conf.conf['url_root'], name)
         # Move to config
+        print("registering %s" % (fn))
         obj = self.nmdc.create_object(fn, desc_enc, data_url)
         if 'detail' in obj:
             print(obj)

@@ -4,6 +4,7 @@ WDL_DIR=/global/cfs/cdirs/m3408/aim2/dev/wdl/
 WATCH_STATE=/global/cfs/cdirs/m3408/ficus/state
 AGENT_STATE=/global/cfs/cdirs/m3408/ficus/agent.state
 DATA_DIR=/global/cfs/cdirs/m3408/ficus/pipeline_products
+JAMO_DIR=/global/cfs/cdirs/m3408/ficus/jamo
 
 # Raw data space
 # This needs to be public so data can be fetch via http

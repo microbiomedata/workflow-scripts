@@ -74,6 +74,7 @@ if __name__ == "__main__":
     jamo = Jamo()
     if len(sys.argv) == 1:
         print("usage: jamo (fetch|list) <proposal> [path]")
+        sys.exit(1)
     comm = sys.argv[1]
     dst_path = conf.get_stage_dir()
     if comm == "fetch":
