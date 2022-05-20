@@ -1,0 +1,37 @@
+FT ICR-MS Analysis Results
+GC-MS Metabolomics Results
+Metaproteomics Workflow Statistics
+Protein Report
+Peptide Report
+Unfiltered Metaproteomics Results
+Read Count and RPKM
+QC non-rRNA R2
+QC non-rRNA R1
+Metagenome Bins
+CheckM Statistics
+GOTTCHA2 Krona Plot
+Kraken2 Krona Plot
+Centrifuge Krona Plot
+Kraken2 Classification Report
+Kraken2 Taxonomic Classification
+Centrifuge Classification Report
+Centrifuge Taxonomic Classification
+Structural Annotation GFF
+Functional Annotation GFF
+Annotation Amino Acid FASTA
+Annotation Enzyme Commission
+Annotation KEGG Orthology
+Assembly Coverage BAM
+Assembly AGP
+Assembly Scaffolds
+Assembly Contigs
+Assembly Coverage Stats
+Filtered Sequencing Reads
+QC Statistics
+TIGRFam Annotation GFF
+Clusters of Orthologous Groups (COG) Annotation GFF
+CATH FunFams (Functional Families) Annotation GFF
+SUPERFam Annotation GFF
+SMART Annotation GFF
+Pfam Annotation GFF
+Direct Infusion FT ICR-MS Raw Data

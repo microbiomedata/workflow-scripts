@@ -1,0 +1,25 @@
+Metaproteomics Workflow Statistics	QC_Metrics.tsv
+Read Count and RPKM	metat_out_json\\/output.json
+QC non-rRNA R2	filtered_R2.fastq
+QC non-rRNA R1	filtered_R1.fastq
+Metagenome Bins	_hqmq_bin.zip
+CheckM Statistics	checkm_qa.out
+GOTTCHA2 Krona Plot	gottcha2_krona.html
+Kraken2 Krona Plot	kraken2_krona.html
+Kraken2 Classification Report	kraken2_report.tsv
+Kraken2 Taxonomic Classification	kraken2_classification.tsv
+Centrifuge Krona Plot	centrifuge_krona.html
+Centrifuge Classification Report	centrifuge_report.tsv
+Centrifuge Taxonomic Classification	centrifuge_classification.tsv
+Structural Annotation GFF	_structural_annotation.gff
+Functional Annotation GFF	_functional_annotation.gff
+Annotation Amino Acid FASTA	_proteins.faa
+Annotation Enzyme Commission	_ec.tsv
+Annotation KEGG Orthology	_ko.tsv
+Assembly Coverage BAM	pairedMapped_sorted.bam
+Assembly AGP	assembly.agp
+Assembly Scaffolds	_scaffolds.fna
+Assembly Contigs	_contigs.fna
+Assembly Coverage Stats	mapping_stats.txt
+Filtered Sequencing Reads	filtered.fastq.gz
+QC Statistics	filterStats.txt
