@@ -11,6 +11,7 @@ import sys
 import requests
 import shutil
 import traceback
+import jsonschema
 
 
 class watcher():
@@ -21,7 +22,8 @@ class watcher():
     _POLL = 20
     _MAX_FAILS = 2
 
-    _ALLOWED = ['metag-1.0.0']
+    _ALLOWED = ['metag-1.0.0', 'metat-1.0.0']
+#    _ALLOWED = ['metag-1.0.0']
 
     def __init__(self):
         self.stage_dir = self.config.get_stage_dir()
@@ -73,8 +75,10 @@ class watcher():
                 # process made a change
                 self.restore()
                 # Check for new jobs
-                self.claim_jobs()
+                if not os.environ.get("SKIP_CLAIM"):
+                    self.claim_jobs()
                 # Check existing jobs
+                self.nmdc.refresh_token()
                 self.check_status()
              
                 # Update op state
@@ -201,7 +205,8 @@ class watcher():
 
 
     def submit(self, njob, opid, force=False):
-        if njob['workflow']['id'].startswith('metag'):
+        wfid = njob['workflow']['id']
+        if wfid.startswith('metag') or wfid.startswith('metat'):
             # Collect some info from the object
             if 'object_id_latest' in njob['config']:
                 print("Old record. Skipping.")
@@ -259,14 +264,20 @@ class watcher():
 
     def claim_jobs(self):
         for j in self.refresh_remote_jobs():
+            print(j)
             jid = j['id']
+            if j.get('claims') and len(j.get('claims')) > 0:
+                    continue
+            #jprint(j)
             print("try to claim:" + jid)
+            self.nmdc.refresh_token()
 
             # claim job
             claim = self.nmdc.claim_job(jid)
             if not claim['claimed']:
                 self.submit(j, claim['id'])
                 self.ckpt()
+#                sys.exit(1)
             else:
                 # Previously claimed
                 opid = claim['detail']['id']
@@ -278,6 +289,76 @@ class watcher():
 
     def _load_json(self, fn):
         return json.loads(open(fn).read())
+
+    def _fixup_activity(self, sdir, act):
+        """
+        Fix up some entries
+        """
+        # Cleanup
+        if sdir == '.':
+            # Drop this for now
+            return None
+        if 'part_of' in act:
+            pof = act.get('part_of')
+            act['part_of'] = [ pof ]
+        if sdir == 'assembly' and 'filename' in act:
+            act.pop('filename')
+        if 'scaf_n_gt50k' in act:
+            act['scaf_n_gt50K'] = act.pop('scaf_n_gt50k')
+        if 'scaf_l_gt50k' in act:
+            act['scaf_l_gt50K'] = act.pop('scaf_l_gt50k')
+        # Drop Nulls in MAGs
+        if sdir == 'MAGs' and 'mags_list' in act:
+            for mag_list in act['mags_list']:
+                for k, v in mag_list.items():
+                    if v is None:
+                        mag_list[k] = ""
+        return act
+
+    def generate_results(self, activity_id):
+        dd = self.config.get_data_dir()
+        outdir = os.path.join(dd, activity_id)
+        results = {"data_object_set": []}
+        if activity_id.startswith("nmdc:mga"):
+            mp = {'.': 'activity_set',
+                  'annotation': 'metagenome_annotation_activity_set',
+                  'assembly': 'metagenome_assembly_set',
+                  'MAGs': "mags_activity_set",
+                  'qa': "read_QC_analysis_activity_set",
+                  'ReadbasedAnalysis': "read_based_analysis_activity_set"
+                 }
+        elif activity_id.startswith("nmdc:mta"):
+            mp = {'.': 'activity_set',
+                  'annotation': 'metatranscriptome_annotation_activity_set',
+                  'assembly': 'metatransciptome_assembly_set',
+                  'qa': "read_QC_analysis_activity_set",
+                  'metat_output': "metatranscriptome_activity_set"
+                 }
+        else:
+            raise ValueError("Omics type not recongnized")
+            
+        for sdir, set_name in mp.items():
+            fn = os.path.join(outdir, sdir, 'activity.json')
+            act = self._load_json(fn)
+            act = self._fixup_activity(sdir, act) 
+            if act:
+                results[set_name] = [act]
+            if sdir != '.':
+                fn = os.path.join(outdir, sdir, 'data_objects.json')
+                dos = self._load_json(fn)
+                for do in dos:
+                    results['data_object_set'].append(do)
+        schemafile =  os.environ.get("SCHEMA")
+        if schemafile:
+            schema = self._load_json(schemafile)
+            try:
+                jsonschema.validators.validate(results, schema)
+            except jsonschema.exceptions.ValidationError as ex:
+                print("Failed validation")
+                print(ex)
+                results = None
+                sys.exit(1)
+        return results
 
     def post_job_done(self, job):
         # Prepare the result record
@@ -336,15 +417,23 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         # Manual mode
         if sys.argv[1] == 'submit':
-            jobid = sys.argv[2]
             w.restore()
-            job = w.nmdc.get_job(jobid)
-            claim = w.nmdc.claim_job(jobid)
-            if claim['claimed']:
-                opid = claim['detail']['id']
-                print(opid)
-            w.submit(job, opid, force=True)
-            w.ckpt()
+            for jobid in sys.argv[2:]:
+                job = w.nmdc.get_job(jobid)
+                claims = job['claims']
+                if len(claims) == 0:
+                    print("todo")
+                    sys.exit(1)
+                    claim = w.nmdc.claim_job(jobid)
+                    opid = claim['detail']['id']
+                else:
+                    opid = claims[0]['op_id']
+                    j = w.find_job_by_opid(opid)
+                    if j:
+                        print("%s use resubmit" % (jobid))
+                        continue
+                w.submit(job, opid, force=True)
+                w.ckpt()
         elif sys.argv[1] == 'resubmit':
             # Let's do it by activity id
             w.restore()
@@ -387,4 +476,11 @@ if __name__ == "__main__":
             w.watch() 
         elif sys.argv[1] == 'reset':
             print(w.nmdc.update_op(sys.argv[2], done=False))
+        elif sys.argv[1] == 'results':
+            # Given the activity ID
+            for actid in sys.argv[2:]:
+                jprint(w.generate_results(actid))
+        elif sys.argv[1] == 'test':
+            jprint(w.refresh_remote_jobs())
+
 
