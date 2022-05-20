@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import pysub
 import sys
 import os
 import json
@@ -65,10 +64,77 @@ class config():
         return load(open(self.conf['workflows']), Loader=Loader)
 
 
+class wfsub:
+    """
+    Class to handle submissions to condor.
+    """
+    config = config()
+    def __init__(self):
+        pass
+
+    def submit(self, workflow, params, options=None, dryrun=False, verbose=False):
+        """
+        Submit a job
+        """
+        # Write input file
+        wf = self.config.workflows[workflow]
+        inputs = deepcopy(wf['inputs'])
+        labels = deepcopy(wf['labels'])
+        for p in ['version', 'pipeline', 'git_url']:
+            params[p] = wf[p]
+        cf = self.config.conf
+        params['data_dir'] = cf['data_dir']
+        params['jamo_dir'] = cf['jamo_dir']
+        params['resource'] = cf['resource']
+        params['user'] = getuser()
+
+        for k, v in inputs.items():
+            inputs[k] = v.format(**params)
+        for k, v in labels.items():
+            labels[k] = v.format(**params)
+        if verbose:
+            print(workflow)
+            jprint(params)
+            jprint(inputs)
+            jprint(labels)
+        infname = _json_tmp(inputs)
+        lblname = _json_tmp(labels)
+
+        wdl = wf['wdl']
+        bundle = wf['bundle']
+        files = {
+            'workflowSource': open(wdl),
+            'workflowDependencies': open(bundle, 'rb'),
+            'workflowInputs': open(infname)
+        }
+
+        files['labels'] = open(lblname)
+
+        # TODO: Add something to handle priority
+        if options:
+            files['workflowOptions'] = open(options)
+
+        if not dryrun:
+            resp = requests.post(cf['url'], data={}, files=files)
+            job_id = json.loads(resp.text)['id']
+        else:
+            job_id = "dryrun"
+        for fld in files:
+            files[fld].close()
+
+        os.unlink(infname)
+        if labels:
+            os.unlink(lblname)
+
+        return job_id
+
+
+
 class job():
     nmdc = nmdcapi()
     config = config()
     conf = config.conf
+    wfs = wfsub()
     cromurl = conf['url']
     data_dir = conf['data_dir']
     resource = conf['resource']
@@ -136,7 +202,7 @@ class job():
         if self.debug:
             print(msg)
 
-    def _generate_label(self):
+    def _xgenerate_label(self):
         """
         Generate a label
         """
@@ -151,7 +217,7 @@ class job():
         self.label = label
         return label
 
-    def _generate_input(self):
+    def _xgenerate_input(self):
         """
         Generate input file for cromwell.
         """
@@ -212,11 +278,16 @@ class job():
         # Reuse the ID from before
         self.log("Resubmit %s" % (self.activity_id))
 
-        # TODO: Rework this to use wfsub below
-        self._generate_label()
-        self._generate_input()
-        jid = pysub.ezsubmit(self.cromurl, self.workflow['wdl'], self.conf['wdl_dir'],
-                             self.input, labels=self.label, bundle_fn=self.workflow['bundle'])
+        # TODO: This is not tested yet
+        params = {
+          "actid": self.activity_id,
+          "inputfile": self.fn,
+          "informed_by": self.proj,
+          "opid": self.opid
+        }
+
+        jid = self.wfs.submit(self.type, params, dryrun=False, verbose=True)
+
         print("Submitted: %s" % (jid))
         self.jobid = jid
         self.done = False
@@ -230,70 +301,3 @@ def _json_tmp(data):
 
 def jprint(data):
     print(json.dumps(data, indent=2))
-
-
-class wfsub:
-    """
-    Class to handle submissions to condor.
-    """
-    config = config()
-    def __init__(self):
-        pass
-
-    def submit(self, workflow, params, options=None, dryrun=False, verbose=False):
-        """
-        Submit a job
-        """
-        # Write input file
-        wf = self.config.workflows[workflow]
-        inputs = deepcopy(wf['inputs'])
-        labels = deepcopy(wf['labels'])
-        for p in ['version', 'pipeline', 'git_url']:
-            params[p] = wf[p]
-        cf = self.config.conf
-        params['data_dir'] = cf['data_dir']
-        params['jamo_dir'] = cf['jamo_dir']
-        params['resource'] = cf['resource']
-        params['user'] = getuser()
-
-        for k, v in inputs.items():
-            inputs[k] = v.format(**params)
-        for k, v in labels.items():
-            labels[k] = v.format(**params)
-        if verbose:
-            print(workflow)
-            jprint(params)
-            jprint(inputs)
-            jprint(labels)
-        infname = _json_tmp(inputs)
-        lblname = _json_tmp(labels)
-
-        wdl = wf['wdl']
-        bundle = wf['bundle']
-        files = {
-            'workflowSource': open(wdl),
-            'workflowDependencies': open(bundle, 'rb'),
-            'workflowInputs': open(infname)
-        }
-
-        files['labels'] = open(lblname)
-
-        # TODO: Add something to handle priority
-        if options:
-            files['workflowOptions'] = open(options)
-
-        if not dryrun:
-            resp = requests.post(cf['url'], data={}, files=files)
-            print(resp.text)
-            job_id = json.loads(resp.text)['id']
-        else:
-            job_id = "dryrun"
-        for fld in files:
-            files[fld].close()
-
-        os.unlink(infname)
-        if labels:
-            os.unlink(lblname)
-
-        return job_id
-
