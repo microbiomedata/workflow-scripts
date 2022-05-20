@@ -17,6 +17,7 @@ WATCH_LIST=/global/cfs/cdirs/m3408/ficus/pipeline_products/watch.lst
 STAGE_DIR=/global/cscratch1/sd/nmdcda/drop
 NMDC_API=http://localhost:9999
 RESOURCE=NERSC-Cori
+SITE=NERSC
 URL_ROOT=https://data.microbiomedata.org/data/
 ACTIVITY_ID_STATE=/global/cfs/cdirs/m3408/aim2/.activity_id_state
 WORKFLOWS=/global/cfs/cdirs/m3408/aim2/tools/wf_configs.yaml

@@ -47,6 +47,7 @@ class watcher():
                           '.' + os.path.basename(fn) + '.reg')
         if os.path.exists(rf):
             # Already registered
+            print("Previously registered")
             return
 
         jsonf = fn + '.json'
@@ -70,6 +71,7 @@ class watcher():
         data_url = '%sraw/%s' % (self.conf.conf['url_root'], name)
         # Move to config
         print("registering %s" % (fn))
+        self.nmdc.refresh_token()
         obj = self.nmdc.create_object(fn, desc_enc, data_url)
         if 'detail' in obj:
             print(obj)
@@ -79,7 +81,7 @@ class watcher():
         with open(rf, 'w') as f:
             f.write(json.dumps(obj))
         print("registered %s as %s" % (fn, oid))
-        sys.exit(1)
+        #sys.exit(1)
 
     def cycle(self):
         req_list = []

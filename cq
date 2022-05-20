@@ -37,7 +37,7 @@ class CQ():
             expand_s = "true"
 
         url = "%s/%s/metadata?expandSubWorkflows=%s" %(self.base, job_id, expand_s)
-        resp = requests.post(url).json()
+        resp = requests.post(url, timeout=60).json()
         return resp
 
     def labels(self, job_id):
@@ -216,6 +216,9 @@ def main():
         print(resp) 
     elif  command.startswith('meta'):
         resp = cq.meta(job_id)
+        print(json.dumps(resp, indent=4)) 
+    elif  command.startswith('metas'):
+        resp = cq.meta(job_id, expand=False)
         print(json.dumps(resp, indent=4)) 
     elif  command=='graph':
         url = "%s/%s/timing" %(job_id)

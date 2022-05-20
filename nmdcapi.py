@@ -43,7 +43,12 @@ class nmdcapi():
     _base_url = 'https://api.dev.microbiomedata.org/'
 
     def __init__(self):
-        self.get_token()
+        try:
+            self.get_token()
+        except Exception as e:
+            self.expires = 0
+            self.token = None
+            raise e
 
     def refresh_token(self):
         # If it expires in 60 seconds, refresh
@@ -222,6 +227,27 @@ class nmdcapi():
 
         return data
 
+    def _page_query(self, url):
+        orig_url = url
+        results = []
+        while True:
+            resp = requests.get(url, headers=self.header).json()
+            if 'resources' not in resp:
+                sys.stderr.write(str(resp))
+                break
+            results.extend(resp['resources'])
+            if not resp['next_page_token']:
+                break
+            url = orig_url + "&page_token=%s" % (resp['next_page_token'])
+        return results
+
+    def list_objs(self, filt=None, max_page_size=40):
+        url = '%sobjects?max_page_size=%d' % (self._base_url, max_page_size)
+        if filt:
+            url += '&filter=%s' % (json.dumps(filt))
+        results = self._page_query(url)
+        return results
+
     def list_ops(self, filt=None, max_page_size=40):
         url = '%soperations?max_page_size=%d' % (self._base_url, max_page_size)
         d = {}
@@ -287,6 +313,22 @@ if __name__ == "__main__":
     elif sys.argv[1] == 'get_job':
         obj = sys.argv[2]
         jprint(nmdc.get_job(obj))
+    elif sys.argv[1] == 'list_jobs':
+        filt = None
+        if len(sys.argv) > 2:
+            filt=sys.argv[2]
+            print(filt)
+        jprint(nmdc.list_jobs(filt=filt))
+    elif sys.argv[1] == 'list_ops':
+        filt = None
+        if len(sys.argv) > 2:
+            filt=json.loads(sys.argv[2])
+        jprint(nmdc.list_ops(filt=filt))
+    elif sys.argv[1] == 'list_objs':
+        filt = None
+        if len(sys.argv) > 2:
+            filt=json.loads(sys.argv[2])
+        jprint(nmdc.list_objs(filt=filt))
     elif sys.argv[1].startswith('get_obj'):
         obj = sys.argv[2]
         d = nmdc.get_object(obj, decode=True)

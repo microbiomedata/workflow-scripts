@@ -23,6 +23,20 @@ class Jamo():
               "Metagenome Minimal Draft",
               "Metagenome Metatranscriptome"]
 
+    def get_list3(self, key, val):
+        url = self._base_url + "metadata/pagequery"
+        try:
+            v = int(val)
+            val = v
+        except:
+            pass
+        
+        q = {
+             key: val
+            }
+        resp = requests.post(url, data=json.dumps({"query": q}))
+        return resp.json()
+
     def get_list2(self, key, val):
         url = self._base_url + "metadata/pagequery"
         q = {
@@ -92,6 +106,12 @@ if __name__ == "__main__":
         val = sys.argv[3]
         resp = jamo.get_list2(key, val)
         print(resp)
+        sys.exit()
+    elif comm == "list3":
+        key = sys.argv[2]
+        val = sys.argv[3]
+        resp = jamo.get_list3(key, val)
+        jprint(resp['records'])
         sys.exit()
     else:
         print("usage")
